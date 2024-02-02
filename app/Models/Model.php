@@ -9,7 +9,7 @@ class Model{
     protected $connection;
     protected $table;
     protected $query;
-    protected $sql, $data=[],$params =null;
+    protected $sql, $data=[],$params =null ,$orderBy = "";
     public function __construct() {
         $this->connection();
      }
@@ -40,73 +40,100 @@ class Model{
         }
         return $this;
      }
-     public function first(){
-          //verificando si se ha ejecutado o no la sentencia previamente
-          if (empty($this->query)) {
-            $this->query($this->sql,$this->data, $this->params);
-         }
-         return $this->query->fetch_assoc();
-     }
-     public function paginate($cantidad = 15){
-           //SELECT * FROM nameTable LIMIT 0,5;
-        $page = isset($_GET['page'])? $_GET['page'] : 1 ;
-        if ($this->sql) {
-            $sql = $this->sql . " LIMIT " . ($page - 1) * $cantidad . ",{$cantidad}";
-            $data = $this->query($sql,$this->data,$this->params)->get();
-        }
-        //si solo uso paginate ($model->paginate(4) se ejecurara el else)
-        else{
-            $sql = "SELECT SQL_CALC_FOUND_ROWS * FROM {$this->table} LIMIT" . ($page -1)*$cantidad . ",{$cantidad}";
-            $data = $this->query($sql)->get();
-        }
 
-        $totalRegistros = $this->query('SELECT FOUND_ROWS() as total')->first()['total'];
-
-        $uri = $_SERVER['REQUEST_URI'];
-        $uri = trim($uri,'/');
-        if(strpos($uri, '?')){
-            $uri = substr($uri, 0, strpos($uri, '?'));
-        }
-        $last_page = ceil($totalRegistros / $cantidad);
-        return [
-            'total' => $totalRegistros,
-            'from' =>  ($page -1) * $cantidad + 1,
-            'to' =>    ($page -1) * $cantidad + count($data),
-            'next_page_url' => $page < $last_page ?  '/' . $uri . '?page=' . $page + 1 :null,
-            'prev_page_url' => $page > 1 ? '/' . $uri . '?page=' . $page - 1 :null,
-            'data' => $data,
-        ];
-     }
-     public function get(){
-        //verificando si se ha ejecutado o no la sentencia previamente
-        if (empty($this->query)) {
-           $this->query($this->sql,$this->data, $this->params);
-        }
-        return $this->query->fetch_all(MYSQLI_ASSOC);
-     }
-     public function all(){
-        //SELECT * FROM nameTable
-        $sql = "SELECT * FROM {$this->table}";
-        return $this->query($sql)->get();
-     }
-
-     public function find($id){
-        //SELECT * FROM nameTable WHERE id = 1
-        $sql = "SELECT * FROM {$this->table} WHERE id = ?";
-        return $this->query($sql,[$id],'i')->first();
-     }
     public function where($column, $operator, $value= null){
         if($value == null){
             $value = $operator;
             $operator = '=';
         }
-        //SELECT * FROM table WHERE name = 'Juan'
-        $this->sql = "SELECT SQL_CALC_FOUND_ROWS * FROM {$this->table} WHERE {$column} {$operator} ?";
-        $this->data[] =$value;
-        return $this;
+        if(empty($this->sql)){
+            //SELECT * FROM table WHERE name = 'Juan'
+            $this->sql = "SELECT SQL_CALC_FOUND_ROWS * FROM {$this->table} WHERE {$column} {$operator} ?";
+            $this->data[] =$value;
+            return $this;
+        }else {
+            $this->sql .= "AND {$column} {$operator} ?";
+            $this->data[] = $value;
+        }
     }   
-        
+    public function orderBy($column , $order = "ASC"){
+        if(empty($this->orderBy)){
+            $this->orderBy = " ORDER BY {$column} {$order}";
+        }else{
+            $this->orderBy .= ", {$column} {$order}";
+        }
+        return  $this; 
+    }
+
+    public function first(){
+        //verificando si se ha ejecutado o no la sentencia previamente
+        if (empty($this->query)) {
+          if(empty($this->sql)){
+              $this->sql = "SELECT * FROM {$this->table}";
+          }
+          $this->sql .= $this->orderBy; //concanetar con order by
+          $this->query($this->sql,$this->data, $this->params);
+       }
+       return $this->query->fetch_assoc();
+    }
+
+    public function get(){
+        //verificando si se ha ejecutado o no la sentencia previamente
+        if (empty($this->query)) {
+            if(empty($this->sql)){
+                $this->sql = "SELECT * FROM {$this->table}";
+            }
+            $this->sql .= $this->orderBy; //concanetar con order by
+           $this->query($this->sql,$this->data, $this->params);
+        }
+        return $this->query->fetch_all(MYSQLI_ASSOC);
+    }
+    public function paginate($cantidad = 15){
+        //SELECT * FROM nameTable LIMIT 0,5;
+     $page = isset($_GET['page'])? $_GET['page'] : 1 ;
+     if ($this->sql) {
+         $sql = $this->sql . ($this->orderBy ?? '') . " LIMIT " . ($page - 1) * $cantidad . ",{$cantidad}";
+         $data = $this->query($sql,$this->data,$this->params)->get();
+     }
+     //si solo uso paginate ($model->paginate(4) se ejecurara el else)
+     else{
+         $sql = "SELECT SQL_CALC_FOUND_ROWS * FROM {$this->table}  " . ($this->orderBy ?? '') . " LIMIT" . ($page -1)*$cantidad . ",{$cantidad}";
+         $data = $this->query($sql)->get();
+     }
+
+     $totalRegistros = $this->query('SELECT FOUND_ROWS() as total')->first()['total'];
+
+     $uri = $_SERVER['REQUEST_URI'];
+     $uri = trim($uri,'/');
+     if(strpos($uri, '?')){
+         $uri = substr($uri, 0, strpos($uri, '?'));
+     }
+     $last_page = ceil($totalRegistros / $cantidad);
+     return [
+         'total' => $totalRegistros,
+         'from' =>  ($page -1) * $cantidad + 1,
+         'to' =>    ($page -1) * $cantidad + count($data),
+         'next_page_url' => $page < $last_page ?  '/' . $uri . '?page=' . $page + 1 :null,
+         'prev_page_url' => $page > 1 ? '/' . $uri . '?page=' . $page - 1 :null,
+         'data' => $data,
+     ];
+ }
+    
+
+
+
     //ALTAS EN DB
+    public function all(){
+        //SELECT * FROM nameTable
+        $sql = "SELECT * FROM {$this->table}";
+        return $this->query($sql)->get();
+    }
+
+    public function find($id){
+        //SELECT * FROM nameTable WHERE id = 1
+        $sql = "SELECT * FROM {$this->table} WHERE id = ?";
+        return $this->query($sql,[$id],'i')->first();
+    }
     public function create($data) {
         // INSERT INTO table (name, email, phone) VALUES (?,?, ?)
         $columns = array_keys($data);
@@ -139,4 +166,6 @@ class Model{
         $sql = "DELETE FROM {$this->table} WHERE id = ?";
         $this->query($sql,[$id],'i');
     }
+    //
+ 
 }
