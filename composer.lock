@@ -1,0 +1,42 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "906f0f46f8a992ebf29cd086635f4188",
+    "packages": [
+        {
+            "name": "laravlite/framework",
+            "version": "1.0.0",
+            "dist": {
+                "type": "path",
+                "url": "vendor/laravlite",
+                "reference": "ae1fbef159457a1a9706d4c12c3a3185cc128022"
+            },
+            "require": {
+                "php": "^8.1"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "LaravLite\\": "src/"
+                }
+            },
+            "description": "Un microframework ligero con la misma estructura y sintaxis de Laravel",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": {},
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {},
+    "platform-dev": {},
+    "plugin-api-version": "2.6.0"
+}

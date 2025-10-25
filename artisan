@@ -1,0 +1,232 @@
+#!/usr/bin/env php
+<?php
+
+require __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/bootstrap/helpers.php';
+
+$command = $argv[1] ?? null;
+
+if ($command === 'config:cache') {
+    $configPath = __DIR__ . '/config';
+    $cachePath  = __DIR__ . '/bootstrap/cache/config.php';
+
+    // Cargar archivos de config
+    $all = [];
+    foreach (glob($configPath . '/*.php') as $file) {
+        $key = basename($file, '.php');
+        $all[$key] = require $file;
+    }
+
+    // Exportar a un solo archivo PHP
+    $content = '<?php return ' . var_export($all, true) . ';';
+    file_put_contents($cachePath, $content);
+
+    echo "✅ Configuración compilada en: {$cachePath}\n";
+    exit(0);
+}
+
+if ($command === 'config:clear') {
+    $cachePath = __DIR__ . '/bootstrap/cache/config.php';
+    if (file_exists($cachePath)) {
+        unlink($cachePath);
+        echo "🗑️  Configuración en caché eliminada.\n";
+    } else {
+        echo "⚠️  No hay caché de configuración para limpiar.\n";
+    }
+    exit(0);
+}
+
+if ($command === 'key:generate' || $command === 'k:g') {
+    $key = base64_encode(random_bytes(32));
+
+    $envPath = __DIR__.'/.env';
+    $env = file_get_contents($envPath);
+    $env = preg_replace('/APP_KEY=.*\n/', "APP_KEY={$key}\n", $env);
+    file_put_contents($envPath, $env);
+
+    echo "✅ Nueva APP_KEY generada y actualizada en .env\n";
+    exit(0);
+}
+
+if ($command === 'serve') {
+    $host = $argv[2] ?? '127.0.0.1:8000';
+    echo "🚀 Servidor escuchando en http://{$host}\n";
+    passthru("php -S {$host} -t public");
+    exit(0);
+}
+
+if ($command === 'make:model') {
+    $name = $argv[2] ?? null;
+    if (!$name) {
+        echo "❌ Debes indicar un nombre: php artisan make:model Post\n";
+        exit(1);
+    }
+
+    $path = __DIR__."/app/Models/{$name}.php";
+    if (file_exists($path)) {
+        echo "⚠️  El modelo {$name} ya existe.\n";
+        exit(1);
+    }
+
+    $content = <<<PHP
+<?php
+namespace App\Models;
+
+class {$name}
+{
+    protected \$table = '{$name}s';
+}
+PHP;
+
+    file_put_contents($path, $content);
+    echo "✅ Modelo creado en: {$path}\n";
+    exit(0);
+}
+
+
+if ($command === 'make:controller') {
+    $name = $argv[2] ?? null;
+    if (!$name) {
+        echo "❌ Debes indicar un nombre: php artisan make:controller HomeController\n";
+        exit(1);
+    }
+
+    $path = __DIR__."/app/Http/Controllers/{$name}.php";
+    if (file_exists($path)) {
+        echo "⚠️  El controlador {$name} ya existe.\n";
+        exit(1);
+    }
+
+    $content = <<<PHP
+<?php
+namespace App\Http\Controllers;
+
+class {$name}
+{
+    public function __invoke()
+    {
+        return 'Hello from {$name}!';
+    }
+}
+PHP;
+
+    file_put_contents($path, $content);
+    echo "✅ Controlador creado en: {$path}\n";
+    exit(0);
+}
+
+if ($command === 'route:list' || $command === 'r:l') {
+    $routes = include __DIR__.'/routes/web.php';
+
+    echo "Método | URI        | Acción\n";
+    echo str_repeat('-', 40) . "\n";
+    foreach ($routes as $route) {
+        echo strtoupper($route['method']) . " | " . $route['uri'] . " | " . $route['action'] . "\n";
+    }
+    exit(0);
+}
+
+
+if ($command === 'make:migration') {
+    $name = $argv[2] ?? null;
+    if (!$name) {
+        echo "❌ Debes indicar un nombre: php artisan make:migration create_posts_table\n";
+        exit(1);
+    }
+
+    $timestamp = date('Y_m_d_His');
+    $filename  = "{$timestamp}_{$name}.php";
+    $path      = __DIR__."/database/migrations/{$filename}";
+
+    $content = <<<PHP
+<?php
+return new class {
+    public function up() {
+        // Código para crear tabla
+    }
+
+    public function down() {
+        // Código para revertir
+    }
+};
+PHP;
+
+    file_put_contents($path, $content);
+    echo "✅ Migración creada: {$filename}\n";
+    exit(0);
+}
+
+
+if ($command === 'migrate') {
+    $pdo = new PDO(
+        "mysql:host=".env('DB_HOST').";dbname=".env('DB_DATABASE'),
+        env('DB_USERNAME'),
+        env('DB_PASSWORD')
+    );
+
+    $migrationsDir = __DIR__.'/database/migrations';
+    $logFile = __DIR__.'/database/migrations.log';
+
+    // Cargar migraciones ya ejecutadas
+    $executed = file_exists($logFile)
+        ? file($logFile, FILE_IGNORE_NEW_LINES)
+        : [];
+
+    $files = glob($migrationsDir.'/*.php');
+    sort($files);
+
+    foreach ($files as $file) {
+        $name = basename($file);
+        if (in_array($name, $executed)) {
+            continue; // ya aplicada
+        }
+
+        $migration = require $file;
+        if (method_exists($migration, 'up')) {
+            echo "🚀 Ejecutando: $name\n";
+            $migration->up($pdo);
+            file_put_contents($logFile, $name.PHP_EOL, FILE_APPEND);
+        }
+    }
+
+    echo "✅ Migraciones completadas.\n";
+    exit(0);
+}
+
+if ($command === 'migrate:rollback') {
+    $pdo = new PDO(
+        "mysql:host=".env('DB_HOST').";dbname=".env('DB_DATABASE'),
+        env('DB_USERNAME'),
+        env('DB_PASSWORD')
+    );
+
+    $migrationsDir = __DIR__.'/database/migrations';
+    $logFile = __DIR__.'/database/migrations.log';
+
+    if (!file_exists($logFile)) {
+        echo "⚠️  No hay migraciones para revertir.\n";
+        exit(0);
+    }
+
+    $executed = file($logFile, FILE_IGNORE_NEW_LINES);
+    if (empty($executed)) {
+        echo "⚠️  Ninguna migración ejecutada.\n";
+        exit(0);
+    }
+
+    $last = array_pop($executed);
+    $migration = require $migrationsDir.'/'.$last;
+
+    if (method_exists($migration, 'down')) {
+        echo "↩️  Revirtiendo: $last\n";
+        $migration->down($pdo);
+        file_put_contents($logFile, implode(PHP_EOL, $executed).PHP_EOL);
+    }
+
+    echo "✅ Rollback completado.\n";
+    exit(0);
+}
+
+
+echo "Comando no reconocido.\n";
+echo "Usa: php artisan config:cache | php artisan config:clear\n";

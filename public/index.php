@@ -1,3 +1,4 @@
-<?php 
-require_once ("../autoloader.php");
-require_once ("../routes/web.php");
+<?php
+
+require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../bootstrap/app.php';
